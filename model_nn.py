@@ -6,31 +6,22 @@ from tensorflow.keras import layers
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.metrics import r2_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # --- 1. REUSED CODE: Data Loading & Preprocessing ---
 def load_data(df, year):
-    # Select features and target variable
-    feature_cols = ['season','mnth','holiday','weekday','workingday','weathersit','temp', 'atemp', 'hum', 'windspeed']
-    target_col = 'cnt'
-
     # extract categorical columns and apply one-hot encoding
     categorical_cols = ['season','mnth','weekday','weathersit','hr']
-    # Note: 'hr' is in the dataset but not in feature_cols list above, 
-    # but let's stick to your colleague's exact logic for consistency.
-    # If 'hr' causes an error because it's missing from input, we will ignore it, 
-    # but based on the provided snippet, this logic extracts categorical data well.
     encoder = OneHotEncoder(drop='first', sparse_output=False).set_output(transform='pandas')
     category_encoded = encoder.fit_transform(df[categorical_cols])
 
-    #extract numeric columns
-    numeric_cols = ['holiday','workingday','temp', 'atemp', 'hum', 'windspeed']
-    # numeric_data = df[numeric_cols].to_numpy() # Not strictly needed if we concat below
-
     #combine encoded categorical and numeric data
     columns_to_drop = ['instant', 'dteday', 'casual', 'registered', 'cnt', 'season','mnth','weekday','weathersit']
-    x = pd.concat([df, category_encoded], axis=1).drop(columns= columns_to_drop).to_numpy()
+    x_df = pd.concat([df, category_encoded], axis=1).drop(columns= columns_to_drop)
+    x = x_df.to_numpy()
+    target_col = 'cnt'
     y = df[target_col].values
 
     return x, y, encoder
@@ -139,3 +130,5 @@ plt.legend()
 
 plt.tight_layout()
 plt.show()
+
+print("R2 Score for degree of y-test and predicted-test x:", r2_score(y_test, predictions))

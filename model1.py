@@ -4,7 +4,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import PolynomialFeatures, OneHotEncoder
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import r2_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -16,25 +16,20 @@ generatePlots = False
 
 #selects data used to predict bike rentals and the actual value measured (uses one-hot encoding for categorical variables)
 def load_data(df, year):
-    # Select features and target variable
-    feature_cols = ['season','mnth','holiday','weekday','workingday','weathersit','temp', 'atemp', 'hum', 'windspeed']
-    target_col = 'cnt'
 
     # extract categorical columns and apply one-hot encoding
     categorical_cols = ['season','mnth','weekday','weathersit','hr']
     encoder = OneHotEncoder(drop='first', sparse_output=False).set_output(transform='pandas')
     category_encoded = encoder.fit_transform(df[categorical_cols])
 
-    #extract numeric columns
-    numeric_cols = ['holiday','workingday','temp', 'atemp', 'hum', 'windspeed']
-    numeric_data = df[numeric_cols].to_numpy()
-
     #combine encoded categorical and numeric data
     columns_to_drop = ['instant', 'dteday', 'casual', 'registered', 'cnt', 'season','mnth','weekday','weathersit']
-    x = pd.concat([df, category_encoded], axis=1).drop(columns= columns_to_drop).to_numpy()
+    x_df = pd.concat([df, category_encoded], axis=1).drop(columns= columns_to_drop)
+    x = x_df.to_numpy()
+    target_col = 'cnt'
     y = df[target_col].values
 
-    return x, y, encoder
+    return x, y, encoder, x_df.columns.tolist()
 
 
 path = "bike+sharing+dataset/hour.csv"
@@ -43,31 +38,31 @@ print(df.shape)
 print(df.columns.tolist())
 
 #x is data used to predict y
-x, y, _ = load_data(df, year=0)
+x, y, _, features= load_data(df, year=0)
 
 
-# #check properties of x
-# print("PROPERTIES OF X")
-# print("Type of x:",type(x))
-# print("First five elements of x are:\n", x[:5]) 
-# print("Shape of x:", x.shape)
+#check properties of x
+print("PROPERTIES OF X")
+print("Type of x:",type(x))
+print("First five elements of x are:\n", x[:5]) 
+print("Shape of x:", x.shape)
 
-# print("-------------------------")
+print("-------------------------")
 
-# #check properties of y
-# print("PROPERTIES OF Y")
-# print("Type of y:",type(y))
-# print("First five elements of y are:\n", y[:5])
-# print("Shape of y:", y.shape)
+#check properties of y
+print("PROPERTIES OF Y")
+print("Type of y:",type(y))
+print("First five elements of y are:\n", y[:5])
+print("Shape of y:", y.shape)
 
 
 #Generate plots
 if generatePlots:
-    # # 1. Correlation heatmap
-    # plt.figure(figsize=(10, 6))
-    # sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt=".2f")
-    # plt.title("Feature Correlation Heatmap")
-    # plt.show()
+    # 1. Correlation heatmap
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(df.corr(), annot=True, cmap='coolwarm', fmt=".2f")
+    plt.title("Feature Correlation Heatmap")
+    plt.show()
 
     # 2. Pairplot for selected features
     sns.pairplot(df, vars=['season','yr','mnth','holiday','weekday','workingday','weathersit','temp', 'atemp', 'hum', 'windspeed'], kind='scatter', diag_kind='kde')
@@ -124,12 +119,7 @@ def compute_cost(x, y, w, b):
     predicted = x @ w + b 
     total_cost = (predicted - y) ** 2
     total_cost = np.sum(total_cost) / (2*m)
-    # for i in range(0,m):
-    #     predicted_i = np.dot(x[i], w)  + b 
-    #     cost_i = (predicted_i - y[i]) ** 2
-    #     total_cost = total_cost + cost_i
-    # total_cost = total_cost / (2*m)
-
+    
     return total_cost
 
 def compute_gradient(x, y, w, b): 
@@ -155,14 +145,7 @@ def compute_gradient(x, y, w, b):
     error = predicted - y
     dj_dw = (x.T @ error) / m
     dj_db = np.sum(error) / m
-    # ### START CODE HERE ### 
-    # for i in range(m):
-    #     predicted_i = np.dot(w, x[i]) + b
-    #     gradient_w += (predicted_i - y[i]) * x[i]
-    #     gradient_b += (predicted_i - y[i])
-    # ### END CODE HERE ### 
-    # dj_db = gradient_b / m
-    # dj_dw = gradient_w / m
+   
     return dj_dw, dj_db
 
 def gradient_descent(x, y, w_in, b_in, cost_function, gradient_function, alpha, num_iters): 
@@ -253,13 +236,13 @@ x_cv, x_test, y_cv, y_test = train_test_split(X_, Y_, test_size=0.5, random_stat
 
 
 #want to have a loop that generates multiple polynomial degrees and selects the best one based on cv error
-max_degree = 3 # degree 3 performed the best till now
+max_degree = 4 # degree 2 performed the best till now
 err_train = np.zeros(max_degree)
 err_cv = np.zeros(max_degree)
 
-#for alpha 0.01, iterations 1500 best degree is 3
+#for alpha 0.01, iterations 1500 best degree is 2
 
-findDegree = True
+findDegree = False
 sklearnModelOnly = True 
 if findDegree:
     for degree in range(1,max_degree):
@@ -269,22 +252,23 @@ if findDegree:
             model = LinearRegression()
             model.fit(x_train_poly, y_train)
             y_train_pred_model = model.predict(x_train_poly)
-            mse_model = mean_squared_error(y_train, y_train_pred_model)/2
+            mse_model = eval_mse(y_train, y_train_pred_model)
             print("Sklearn model train MSE for degree", degree, ":", mse_model)
             x_cv_poly = poly.transform(x_cv)
             y_cv_pred_model = model.predict(x_cv_poly)
-            mse_model_cv = mean_squared_error(y_cv, y_cv_pred_model)/2
+            mse_model_cv = eval_mse(y_cv, y_cv_pred_model)
             print("Sklearn model cv MSE for degree", degree, ":", mse_model_cv)
 
 #final model with best degree
 
 # some gradient descent settings
-iterations = 1500 #in all cases at around 4000 iterations the cost converges for alpha = 0.001
+iterations = 1500 
 alpha = 0.05
 
 best_degree = 2 #obtained from skelearn model above
 poly = PolynomialFeatures(degree=best_degree, include_bias=False)
 x_train_poly = poly.fit_transform(x_train)
+
 x_train_norm, mu, sigma = zscore_normalize_features(x_train_poly)
 initial_w = np.zeros(x_train_poly.shape[1], dtype=float)
 initial_b = 0.0
@@ -304,8 +288,11 @@ x_test_poly = poly.transform(x_test)
 x_test_poly_norm = (x_test_poly - mu) / sigma
 m = x_test_poly.shape[0]
 predicted_test = x_test_poly_norm.dot(w) + b
-test_error = mean_squared_error(y_test, predicted_test)/2
+test_error = eval_mse(y_test, predicted_test)
 print("Test set Mean Squared Error for degree", best_degree, ":", test_error)
+print("Test set Root Mean Squared Error for degree", best_degree, ":", np.sqrt(test_error))
+print("R2 Score for degree of y-test and predicted-test for", best_degree, ":", r2_score(y_test, predicted_test))
+print("Mean absolute error for degree", best_degree, ":", np.mean(np.abs(y_test - predicted_test)))
 plt.figure(figsize=(7,7))
 
 plt.scatter(y_test, predicted_test, alpha=0.4)
@@ -319,3 +306,5 @@ max_val = max(y_test.max(), predicted_test.max())
 plt.plot([0, max_val], [0, max_val], color='red', linewidth=2)
 
 plt.show()
+
+print("Feature names after polynomial expansion:", x_train_poly.shape[1])
